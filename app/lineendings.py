@@ -1,6 +1,9 @@
 """Detecting and scanning line endings (R1). Nothing here changes a file."""
 
+import contextlib
 import os
+import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -87,3 +90,74 @@ def list_files(root: Path) -> list[Path]:
 def scan(root: Path) -> list[FileReport]:
     """Report on every file under root without modifying anything (R1.6)."""
     return [inspect_file(p) for p in list_files(root)]
+
+
+# ---------------------------------------------------------------------------
+# Converting (R1.8, R1.9)
+# ---------------------------------------------------------------------------
+
+LINE_BREAK = {"lf": b"\n", "crlf": b"\r\n", "cr": b"\r"}
+
+
+def convert_bytes(data: bytes, to: str) -> bytes:
+    """Return data with every line ending replaced by the `to` style.
+
+    Order matters: turn "\\r\\n" into "\\n" first, so the following step (lone
+    "\\r" into "\\n") cannot split a CRLF into two endings.
+    """
+    unified = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return unified.replace(b"\n", LINE_BREAK[to])
+
+
+def write_atomic(path: Path, data: bytes) -> None:
+    """Replace the file's content safely (R1.9).
+
+    The new content goes into a temporary file next to the original, and only
+    when it is complete does os.replace swap it in. If anything fails, the
+    original is untouched and the temporary file is removed.
+    """
+    fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as temp:
+            temp.write(data)
+        shutil.copymode(path, temp_name)  # keep the original's permissions
+        os.replace(temp_name, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(temp_name)
+        raise
+
+
+@dataclass(frozen=True)
+class ConvertResult:
+    """What convert did with one file."""
+
+    path: Path
+    outcome: str  # "converted", "unchanged" or "skipped"
+    detail: str  # e.g. "crlf -> lf", "already lf", "binary", "write failed"
+    original: str | None = None  # the old style, set when outcome == "converted"
+
+
+def convert(root: Path, to: str) -> list[ConvertResult]:
+    """Convert every changeable file under root to the `to` style."""
+    results = []
+    for path in list_files(root):
+        try:
+            data = path.read_bytes()
+        except OSError:
+            results.append(ConvertResult(path, "skipped", "unreadable"))
+            continue
+
+        style = detect_style(data)
+        if style not in STYLES:
+            results.append(ConvertResult(path, "skipped", style))
+        elif style == to:
+            results.append(ConvertResult(path, "unchanged", f"already {to}"))
+        else:
+            try:
+                write_atomic(path, convert_bytes(data, to))
+            except OSError:
+                results.append(ConvertResult(path, "skipped", "write failed"))
+            else:
+                results.append(ConvertResult(path, "converted", f"{style} -> {to}", style))
+    return results
