@@ -36,20 +36,22 @@ Scope: scan, convert, history, revert. Stdlib only, Python 3.12+.
 - **R1.3** A file is *changeable* only if it is a text file, is uniform, and has at
   least one line ending. Every other file is *skipped*, with exactly one reason:
   `binary` (a NUL byte or not valid UTF-8), `mixed` (more than one style), or
-  `no line endings` (empty, or a single line with no ending).
+  `no line endings` (empty, or a single line with no ending). A file that cannot
+  be read (for example, no permission) is skipped with the reason `unreadable`.
 - **R1.4** For each changeable file, `scan` shows its current style and a suggested
   target: `crlf` -> `lf`, `lf` -> `crlf`, `cr` -> `lf`.
 - **R1.5** Scanning a directory is recursive and visits files in sorted order. It
   does not enter directories named `.git`, `.hg`, `.svn`, `node_modules`,
-  `__pycache__` or `.venv`.
+  `__pycache__` or `.venv`. Symbolic links are ignored (not listed, not changed).
 - **R1.6** `scan` never modifies any file.
 - **R1.7** Output is one line per file, then one summary line:
 
-      changeable  crlf -> lf  path/to/a.txt
-      skipped     binary      path/to/pic.png
+      changeable  crlf -> lf    path/to/a.txt
+      skipped     binary        path/to/pic.png
       2 changeable, 1 skipped
 
-  The summary uses the counts of changeable and skipped files.
+  The summary uses the counts of changeable and skipped files. In every command
+  the first column is 12 characters wide and the second is 14 characters wide.
 - **R1.8** `convert PATH --to STYLE` changes every changeable file under `PATH` to
   `STYLE`. Files already in `STYLE` are left untouched. Skipped files are left
   untouched and listed with their reason. All bytes other than line endings stay
