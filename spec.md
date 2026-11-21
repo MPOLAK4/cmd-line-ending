@@ -53,7 +53,15 @@ Scope: scan, convert, history, revert. Stdlib only, Python 3.12+.
 - **R1.8** `convert PATH --to STYLE` changes every changeable file under `PATH` to
   `STYLE`. Files already in `STYLE` are left untouched. Skipped files are left
   untouched and listed with their reason. All bytes other than line endings stay
-  exactly the same.
+  exactly the same. Output is one line per file, then a summary line:
+
+      converted   crlf -> lf    path/to/a.txt
+      unchanged   already lf    path/to/b.txt
+      skipped     binary        path/to/pic.png
+      1 converted, 1 unchanged, 1 skipped
+
+  `convert` exits 0 even when some files were skipped, and exits 1 (error on
+  stderr) if `PATH` does not exist.
 - **R1.9** A file is written safely: the new content goes to a temporary file in the
   same directory, which then replaces the original. No temporary file is left
   behind, and the original's permissions are kept.
@@ -70,14 +78,26 @@ Scope: scan, convert, history, revert. Stdlib only, Python 3.12+.
   environment variable `CMD_LINE_ENDING_HOME` when it is set.
 - **R2.3** The cache keeps only the 50 newest entries; older ones are dropped.
 - **R2.4** `history` lists entries newest first. Each entry shows its id, time,
-  target style and file count, followed by its file paths. With no entries it
-  prints `No recent changes.`
+  target style and file count, followed by its file paths, one per line and
+  indented by four spaces:
+
+      #2  2026-11-21 17:30:02 UTC  to lf  2 files
+          /abs/path/a.txt
+          /abs/path/b.txt
+
+  With no entries it prints `No recent changes.`
 - **R2.5** `revert [ID]` puts every file of that entry back to its original style.
   Without `ID` it uses the newest entry. An unknown id, or an empty history, prints
   an error to stderr and exits with code 1.
 - **R2.6** `revert` skips a file that no longer exists or whose current style is no
   longer the one the entry recorded as the target (someone edited it since), and
-  says so. After the revert the entry is removed from the cache.
+  says so. After the revert the entry is removed from the cache. Output is one
+  line per file, then a summary line:
+
+      reverted    lf -> crlf    /abs/path/a.txt
+      skipped     changed since /abs/path/b.txt
+      skipped     missing       /abs/path/c.txt
+      1 reverted, 2 skipped
 - **R2.7** A missing, unreadable or corrupt `history.json` is treated as an empty
   history; it never crashes a command.
 
