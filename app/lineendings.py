@@ -1,11 +1,10 @@
 """Detecting and scanning line endings (R1). Nothing here changes a file."""
 
-import contextlib
 import os
-import shutil
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+
+from app.fileio import write_atomic
 
 # R1.5: folders we never look inside.
 SKIP_DIRS = {".git", ".hg", ".svn", "node_modules", "__pycache__", ".venv"}
@@ -109,31 +108,12 @@ def convert_bytes(data: bytes, to: str) -> bytes:
     return unified.replace(b"\n", LINE_BREAK[to])
 
 
-def write_atomic(path: Path, data: bytes) -> None:
-    """Replace the file's content safely (R1.9).
-
-    The new content goes into a temporary file next to the original, and only
-    when it is complete does os.replace swap it in. If anything fails, the
-    original is untouched and the temporary file is removed.
-    """
-    fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "wb") as temp:
-            temp.write(data)
-        shutil.copymode(path, temp_name)  # keep the original's permissions
-        os.replace(temp_name, path)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(temp_name)
-        raise
-
-
 @dataclass(frozen=True)
 class ConvertResult:
-    """What convert did with one file."""
+    """What convert (or revert) did with one file."""
 
     path: Path
-    outcome: str  # "converted", "unchanged" or "skipped"
+    outcome: str  # "converted", "unchanged", "reverted" or "skipped"
     detail: str  # e.g. "crlf -> lf", "already lf", "binary", "write failed"
     original: str | None = None  # the old style, set when outcome == "converted"
 
@@ -160,4 +140,35 @@ def convert(root: Path, to: str) -> list[ConvertResult]:
                 results.append(ConvertResult(path, "skipped", "write failed"))
             else:
                 results.append(ConvertResult(path, "converted", f"{style} -> {to}", style))
+    return results
+
+
+def revert(entry: dict) -> list[ConvertResult]:
+    """Put the files of one history entry back to their original style (R2.5, R2.6).
+
+    A file is only touched if it still has the style the entry says we changed it
+    to. Otherwise someone has edited or removed it since, and we leave it alone.
+    """
+    to = entry["to"]
+    results = []
+    for recorded in entry["files"]:
+        path, original = Path(recorded["path"]), recorded["from"]
+        try:
+            data = path.read_bytes()
+        except FileNotFoundError:
+            results.append(ConvertResult(path, "skipped", "missing"))
+            continue
+        except OSError:
+            results.append(ConvertResult(path, "skipped", "unreadable"))
+            continue
+
+        if detect_style(data) != to:
+            results.append(ConvertResult(path, "skipped", "changed since"))
+            continue
+        try:
+            write_atomic(path, convert_bytes(data, original))
+        except OSError:
+            results.append(ConvertResult(path, "skipped", "write failed"))
+        else:
+            results.append(ConvertResult(path, "reverted", f"{to} -> {original}"))
     return results
