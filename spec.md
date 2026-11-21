@@ -79,10 +79,12 @@ Scope: scan, convert, history, revert. Stdlib only, Python 3.12+.
   files (a batch). A `convert` that changes nothing adds no entry.
 - **R2.2** The cache is one JSON file, `history.json`, kept in a folder outside the
   scanned files: `~/.cmd-line-ending/` by default, or the folder named by the
-  environment variable `CMD_LINE_ENDING_HOME` when it is set.
+  environment variable `CMD_LINE_ENDING_HOME` when it is set. Ids are whole numbers
+  counting up from 1 and are never reused, because the file also stores the next
+  id to hand out.
 - **R2.3** The cache keeps only the 50 newest entries; older ones are dropped.
 - **R2.4** `history` lists entries newest first. Each entry shows its id, time,
-  target style and file count, followed by its file paths, one per line and
+  target style and file count (`1 file` or `N files`), followed by its file paths, one per line and
   indented by four spaces:
 
       #2  2026-11-21 17:30:02 UTC  to lf  2 files
@@ -103,7 +105,8 @@ Scope: scan, convert, history, revert. Stdlib only, Python 3.12+.
       skipped     missing       /abs/path/c.txt
       1 reverted, 2 skipped
 - **R2.7** A missing, unreadable or corrupt `history.json` is treated as an empty
-  history; it never crashes a command.
+  history; it never crashes a command. If the cache cannot be saved, the command
+  still finishes its work and prints `warning: could not save history` to stderr.
 
 ### Out of scope for Round 1
 
