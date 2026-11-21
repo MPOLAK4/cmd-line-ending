@@ -66,7 +66,9 @@ Scope: scan, convert, history, revert. Stdlib only, Python 3.12+.
   stderr) if `PATH` does not exist.
 - **R1.9** A file is written safely: the new content goes to a temporary file in the
   same directory, which then replaces the original. No temporary file is left
-  behind, and the original's permissions are kept.
+  behind, and the original's permissions are kept. If writing a file fails, that
+  file is left exactly as it was, is reported as `skipped  write failed`, and
+  `convert` carries on with the remaining files.
 
 ### R2: small cache of recent changes, with revert
 
