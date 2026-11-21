@@ -89,9 +89,10 @@ class RevertTests(AppTestCase):
         f = self.write("a.txt", b"x\r\n")
         self.run_app("convert", f, "--to", "lf")
         self.run_app("revert", "1")
-        code, _, err = self.run_app("revert", "1")
+        code, out, err = self.run_app("revert", "1")
         self.assertEqual(code, 1)
-        self.assertIn("1", err)
+        self.assertEqual(out, "")
+        self.assertNotEqual(err, "")
 
     def test_R2_6_missing_file_is_skipped_and_the_others_are_reverted(self):
         gone = self.write("a_gone.txt", b"x\r\n")
