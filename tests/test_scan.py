@@ -4,6 +4,8 @@ Each test name starts with the requirement ID from spec.md that it checks.
 """
 
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from app.lineendings import detect_style
 from helpers import AppTestCase
@@ -97,6 +99,35 @@ class ScanCommandTests(AppTestCase):
                              ("empty.txt", "no line endings")]:
             self.assertTrue(lines[name].startswith("skipped"), lines[name])
             self.assertIn(reason, lines[name])
+
+    def test_R1_3_unreadable_file_is_skipped_not_a_crash(self):
+        f = self.write("locked.txt", b"x\n")
+        self.write("ok.txt", b"x\n")
+        real_read_bytes = Path.read_bytes
+
+        def fake_read_bytes(path):
+            if path.name == "locked.txt":
+                raise PermissionError("denied")
+            return real_read_bytes(path)
+
+        # chmod does not block reading on Windows, so we simulate the error.
+        with mock.patch.object(Path, "read_bytes", fake_read_bytes):
+            code, out, _ = self.run_app("scan", self.work)
+        self.assertEqual(code, 0)
+        locked = [l for l in out.splitlines() if str(f) in l][0]
+        self.assertTrue(locked.startswith("skipped"))
+        self.assertIn("unreadable", locked)
+        self.assertEqual(out.splitlines()[-1], "1 changeable, 1 skipped")
+
+    def test_R1_5_symbolic_links_are_ignored(self):
+        target = self.write("real.txt", b"x\n")
+        try:
+            (self.work / "link.txt").symlink_to(target)
+        except (OSError, NotImplementedError):
+            self.skipTest("this system does not allow creating symbolic links")
+        _, out, _ = self.run_app("scan", self.work)
+        self.assertIn("real.txt", out)
+        self.assertNotIn("link.txt", out)
 
     def test_R1_5_recurses_into_subdirectories(self):
         self.write("sub/deeper/c.txt", b"x\r\n")
