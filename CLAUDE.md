@@ -48,3 +48,23 @@ would not put on a public web page. These repositories are public."
   short message saying what changed. Do not batch unrelated changes together.
 - Never push. I decide what gets pushed and when. Do not run `git push`, add
   remotes, or create GitHub repos unless I ask.
+
+## Conventions for every round (cmd-line-ending)
+
+- `spec.md` is the precise version of `problem.md`. When a requirement is added or
+  changed, update `spec.md` first and commit it, then write tests, then the code.
+- Every test name starts with the sub-requirement ID it checks, for example
+  `test_R2_6_missing_file_is_skipped_...`. Each statement in `spec.md` should have at
+  least one test; do not weaken a test to make it pass unless the test is wrong, and
+  say so when that happens.
+- Tests must never touch real user files or the real cache. Subclass `AppTestCase`
+  in `tests/helpers.py` (it points `CMD_LINE_ENDING_HOME` at a temporary folder), and
+  create test files with `write_bytes`, never text mode, because Windows and Git
+  can silently rewrite line endings in text mode.
+- Decisions that had real alternatives get a Y-statement record in
+  `docs/decisions/`, numbered in order (`0004-...md` is next). Do not edit an
+  accepted record; add a new one that supersedes it.
+- Standard library only, Python 3.12+. No new dependencies.
+- Never undo or amend a commit (no `reset`, `revert`, `commit --amend`, rebase).
+  Fix mistakes with a new commit.
+- Write a handoff file only when I ask for one.
