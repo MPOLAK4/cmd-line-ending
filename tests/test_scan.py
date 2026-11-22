@@ -120,12 +120,17 @@ class ScanCommandTests(AppTestCase):
         self.assertEqual(out.splitlines()[-1], "1 changeable, 1 skipped")
 
     def test_R1_5_symbolic_links_are_ignored(self):
-        target = self.write("real.txt", b"x\n")
-        try:
-            (self.work / "link.txt").symlink_to(target)
-        except (OSError, NotImplementedError):
-            self.skipTest("this system does not allow creating symbolic links")
-        _, out, _ = self.run_app("scan", self.work)
+        self.write("real.txt", b"x\n")
+        self.write("link.txt", b"x\n")
+        real_is_symlink = Path.is_symlink
+
+        def fake_is_symlink(path):
+            # Report link.txt as a symbolic link without creating a real one,
+            # because Windows often forbids creating links.
+            return path.name == "link.txt" or real_is_symlink(path)
+
+        with mock.patch.object(Path, "is_symlink", fake_is_symlink):
+            _, out, _ = self.run_app("scan", self.work)
         self.assertIn("real.txt", out)
         self.assertNotIn("link.txt", out)
 
